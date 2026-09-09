@@ -1,3 +1,6 @@
 [submodule "generator-service"]
 	path = generator-service
 	url = https://gitlab.com/genai-bot/generator-service.git
+[submodule "talkmodachi"]
+	path = talkmodachi
+	url = https://github.com/dylanpdx/talkmodachi.git
