@@ -23,7 +23,9 @@ function requestBuffer(url) {
 }
 
 async function synthesize(text, options = {}) {
-  const base = process.env.TTS_SERVICE_URL || 'http://localhost:5000/tts';
+  const base_host = process.env.TTS_SERVICE_URL || 'http://localhost:5000/';
+  // Append with `/tts`
+  const base = base_host.endsWith('/') ? `${base_host}tts` : `${base_host}/tts`;
   const url = new URL(base);
   url.searchParams.set('text', text);
   url.searchParams.set('lang', 'useng');
