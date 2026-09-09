@@ -5,7 +5,8 @@
   "main": "src/index.js",
   "type": "commonjs",
   "scripts": {
-    "start": "node src/index.js"
+    "start": "node src/index.js",
+    "commands": "node src/deploy-commands.js"
   },
   "dependencies": {
     "@discordjs/voice": "^0.19.2",
