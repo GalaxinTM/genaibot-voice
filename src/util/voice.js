@@ -10,6 +10,13 @@ const {
 } = require("@discordjs/voice");
 const prism = require("prism-media");
 const { Readable } = require("stream");
+const { generateText } = require("./generatorClient");
+const { synthesize } = require("./ttsClient");
+const { transcribeBuffer } = require("../services/stt");
+const {
+  incrementGuildCounter,
+  resetGuildCounter,
+} = require("./voiceActivity");
 
 function setupVoiceEcho(connection) {
   // 1. Create the AudioPlayer and subscribe the VoiceConnection
@@ -126,8 +133,109 @@ async function connectToChannel(channel) {
   }
 }
 
+function getGuildIdFromConnection(connection) {
+  if (connection && connection.joinConfig && connection.joinConfig.guildId) {
+    return connection.joinConfig.guildId;
+  }
+
+  if (connection && connection.guild && connection.guild.id) {
+    return connection.guild.id;
+  }
+
+  return 'default';
+}
+
+function ensureAudioPlayer(connection) {
+  if (!connection._audioPlayer) {
+    const player = createAudioPlayer();
+    connection._audioPlayer = player;
+    connection.subscribe(player);
+  }
+
+  return connection._audioPlayer;
+}
+
+function playAudioBuffer(connection, audioBuffer) {
+  const player = ensureAudioPlayer(connection);
+  const bufferStream = Readable.from(audioBuffer);
+  const resource = createAudioResource(bufferStream, {
+    inputType: StreamType.Arbitrary,
+  });
+
+  player.play(resource);
+}
+
+async function triggerVoiceResponse(connection, guildId) {
+  try {
+    const generatedText = await generateText(guildId);
+    if (!generatedText || !generatedText.trim()) {
+      console.warn(`[voice] Generator returned empty text for guild ${guildId}`);
+      return;
+    }
+
+    const audioBuffer = await synthesize(generatedText, {
+      lang: process.env.TTS_LANG || 'useng',
+      pitch: Number(process.env.TTS_PITCH || 50),
+      speed: Number(process.env.TTS_SPEED || 50),
+      quality: Number(process.env.TTS_QUALITY || 50),
+      tone: Number(process.env.TTS_TONE || 50),
+      accent: Number(process.env.TTS_ACCENT || 50),
+      intonation: Number(process.env.TTS_INTONATION || 1),
+    });
+
+    if (audioBuffer && audioBuffer.length > 0) {
+      playAudioBuffer(connection, audioBuffer);
+    }
+  } catch (error) {
+    console.error(`[voice] Failed to trigger response for guild ${guildId}:`, error);
+  }
+}
+
+function startVoiceActivityMonitor(connection) {
+  const receiver = connection.receiver;
+  const guildId = getGuildIdFromConnection(connection);
+  const threshold = Number(process.env.VOICE_TRIGGER_THRESHOLD || 3);
+
+  receiver.speaking.on('start', (userId) => {
+    const speechStream = receiver.subscribe(userId, {
+      end: {
+        behavior: EndBehaviorType.AfterSilence,
+        duration: 3000,
+      },
+    });
+
+    const chunks = [];
+    speechStream.on('data', (chunk) => chunks.push(chunk));
+
+    speechStream.on('end', async () => {
+      const pcmBuffer = Buffer.concat(chunks);
+      if (pcmBuffer.length === 0) {
+        return;
+      }
+
+      try {
+        await transcribeBuffer(pcmBuffer);
+      } catch (error) {
+        console.warn(`[stt] Stub transcribeBuffer no-op warning for guild ${guildId}:`, error.message);
+      }
+
+      const count = incrementGuildCounter(guildId);
+      console.log(`[voice] speech segment complete for guild ${guildId}; count=${count}`);
+
+      if (count >= threshold) {
+        resetGuildCounter(guildId);
+        console.log(`[voice] triggering generator/TTS playback for guild ${guildId}`);
+        await triggerVoiceResponse(connection, guildId);
+      }
+    });
+  });
+}
+
 module.exports = {
   connectToChannel,
   listenToUsers,
   setupVoiceEcho,
+  playAudioBuffer,
+  triggerVoiceResponse,
+  startVoiceActivityMonitor,
 };

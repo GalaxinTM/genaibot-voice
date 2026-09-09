@@ -1,6 +1,6 @@
 const { SlashCommandBuilder } = require("discord.js");
 const { getVoiceConnection } = require("@discordjs/voice");
-const { connectToChannel, setupVoiceEcho } = require("../util/voice");
+const { connectToChannel, startVoiceActivityMonitor } = require("../util/voice");
 
 module.exports = {
   data: new SlashCommandBuilder()
@@ -39,7 +39,7 @@ module.exports = {
 
     try {
       const newConnection = await connectToChannel(channel);
-      setupVoiceEcho(newConnection);
+      startVoiceActivityMonitor(newConnection);
       await interaction.editReply(`Joined <#${channel.id}>!`);
     } catch (error) {
       console.error("Error joining voice channel:", error);
