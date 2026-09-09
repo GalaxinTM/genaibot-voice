@@ -8,7 +8,7 @@ const {
 const { joinVoiceChannel, getVoiceConnection } = require("@discordjs/voice");
 const fs = require("node:fs");
 const path = require("node:path");
-require("dotenv").config();
+require("dotenv").config({quiet: true}); // Load environment variables from .env file
 
 const client = new Client({
   intents: [
