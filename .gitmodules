@@ -4,3 +4,6 @@
 [submodule "talkmodachi"]
 	path = talkmodachi
 	url = https://github.com/dylanpdx/talkmodachi.git
+[submodule "whisper.cpp"]
+	path = whisper.cpp
+	url = https://github.com/ggerganov/whisper.cpp

@@ -6,7 +6,8 @@
   "type": "commonjs",
   "scripts": {
     "start": "node src/index.js",
-    "commands": "node src/deploy-commands.js"
+    "register": "node src/deploy-commands.js",
+    "rm-commands": "node src/delete-all-commands.js"
   },
   "dependencies": {
     "@discordjs/opus": "^0.10.0",

@@ -12,11 +12,13 @@ const prism = require("prism-media");
 const { Readable } = require("stream");
 const { generateText } = require("./generatorClient");
 const { synthesize } = require("./ttsClient");
-const { transcribeBuffer } = require("../services/stt");
+const { transcribeBuffer } = require("./stt");
 const {
   incrementGuildCounter,
   resetGuildCounter,
 } = require("./voiceActivity");
+
+const activeSpeechSessions = new Map();
 
 function setupVoiceEcho(connection) {
   // 1. Create the AudioPlayer and subscribe the VoiceConnection
@@ -197,6 +199,11 @@ function startVoiceActivityMonitor(connection) {
   const threshold = Number(process.env.VOICE_TRIGGER_THRESHOLD || 3);
 
   receiver.speaking.on('start', (userId) => {
+    const sessionKey = `${guildId}:${userId}`;
+    if (activeSpeechSessions.has(sessionKey)) {
+      return;
+    }
+
     const speechStream = receiver.subscribe(userId, {
       end: {
         behavior: EndBehaviorType.AfterSilence,
@@ -204,19 +211,47 @@ function startVoiceActivityMonitor(connection) {
       },
     });
 
-    const chunks = [];
-    speechStream.on('data', (chunk) => chunks.push(chunk));
+    const decoder = new prism.opus.Decoder({
+      rate: 48000,
+      channels: 2,
+      frameSize: 960,
+    });
+    const pcmStream = speechStream.pipe(decoder);
 
-    speechStream.on('end', async () => {
+    const chunks = [];
+    const session = {
+      key: sessionKey,
+      chunks,
+      pcmStream,
+      timer: null,
+      finalized: false,
+      active: true,
+    };
+
+    activeSpeechSessions.set(sessionKey, session);
+
+    const finishSession = async () => {
+      if (!session.active || session.finalized) {
+        return;
+      }
+      session.finalized = true;
+      session.active = false;
+
+      if (session.timer) {
+        clearTimeout(session.timer);
+      }
+
       const pcmBuffer = Buffer.concat(chunks);
       if (pcmBuffer.length === 0) {
+        activeSpeechSessions.delete(sessionKey);
         return;
       }
 
       try {
-        await transcribeBuffer(pcmBuffer);
+        const transcript = await transcribeBuffer(pcmBuffer, guildId, userId);
+        console.log(`[stt] guild=${guildId} user=${userId} transcript=${transcript}`);
       } catch (error) {
-        console.warn(`[stt] Stub transcribeBuffer no-op warning for guild ${guildId}:`, error.message);
+        console.warn(`[stt] transcribeBuffer failed for guild ${guildId}:`, error.message);
       }
 
       const count = incrementGuildCounter(guildId);
@@ -227,6 +262,31 @@ function startVoiceActivityMonitor(connection) {
         console.log(`[voice] triggering generator/TTS playback for guild ${guildId}`);
         await triggerVoiceResponse(connection, guildId);
       }
+
+      activeSpeechSessions.delete(sessionKey);
+    };
+
+    const armFinalizeTimer = () => {
+      if (session.timer) {
+        clearTimeout(session.timer);
+      }
+
+      session.timer = setTimeout(() => {
+        finishSession().catch((error) => {
+          console.warn(`[stt] finalizeSession failed for guild ${guildId}:`, error.message);
+        });
+      }, 3000);
+    };
+
+    pcmStream.on('data', (chunk) => {
+      chunks.push(chunk);
+      armFinalizeTimer();
+    });
+
+    pcmStream.on('end', () => {
+      finishSession().catch((error) => {
+        console.warn(`[stt] finalizeSession failed for guild ${guildId}:`, error.message);
+      });
     });
   });
 }

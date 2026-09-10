@@ -2,6 +2,8 @@
 
 Reads and remembers user messages from voice chat, then generates a new message and speaks it out loud.
 
-## generator-service
+## Ports
 
-interact with it using localhost:3000/?channel_id=CHANNELIDHERE
+3000: generator-service
+4000: whisper.cpp
+5000: talkmodachi (tts)
