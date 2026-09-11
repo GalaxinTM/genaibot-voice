@@ -104,6 +104,8 @@ async function connectToChannel(channel) {
     selfMute: false,
   });
 
+  connection.voiceChannel = channel;
+
   try {
     await entersState(connection, VoiceConnectionStatus.Ready, 20_000);
 
@@ -175,6 +177,12 @@ async function triggerVoiceResponse(connection, guildId) {
       return;
     }
 
+    try {
+      await connection.voiceChannel.sendTyping();
+    } catch (error) {
+      console.warn(`[voice] Failed to send typing indicator to joined voice channel for guild ${guildId}:`, error.message);
+    }
+
     const audioBuffer = await synthesize(generatedText, {
       lang: process.env.TTS_LANG || 'useng',
       pitch: Number(process.env.TTS_PITCH || 50),
@@ -188,6 +196,13 @@ async function triggerVoiceResponse(connection, guildId) {
     if (audioBuffer && audioBuffer.length > 0) {
       playAudioBuffer(connection, audioBuffer);
     }
+
+    try {
+      await connection.voiceChannel.send(`${generatedText}`);
+    } catch (error) {
+      console.warn(`[voice] Failed to send generated text to joined voice channel for guild ${guildId}:`, error.message);
+    }
+
   } catch (error) {
     console.error(`[voice] Failed to trigger response for guild ${guildId}:`, error);
   }
