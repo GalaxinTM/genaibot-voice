@@ -10,8 +10,21 @@ function normalizeTranscript(rawTranscript) {
     rawTranscript = String(rawTranscript || '');
   }
 
-  const transcript = rawTranscript.trim();
-  if (!transcript || transcript === '[BLANK_AUDIO]' || transcript.toLowerCase().includes('blank_audio')) {
+  const transcript = rawTranscript
+    // 1. Normalize line endings
+    .replace(/\r\n/g, '\n')
+    // 2. Remove [xyz], (xyz), and *xyz* (restricted to single lines)
+    .replace(/(?:\[[^\r\n\]]*\]|\([^\r\n()]*\)|\*[^\r\n*]+\*)/g, ' ')
+    // 3. Collapse multiple spaces/tabs within lines into a single space
+    .replace(/[ \t]+/g, ' ')
+    // 4. Strip leading and trailing spaces from EVERY line using multiline flag (/m)
+    .replace(/^[ \t]+|[ \t]+$/gm, '')
+    // 5. Limit consecutive blank lines to max 2 newlines (preserving paragraph breaks)
+    .replace(/\n{2,}/g, '\n\n')
+    // 6. Trim entire result
+    .trim();
+
+  if (!transcript) {
     return '';
   }
 
