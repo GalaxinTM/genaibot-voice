@@ -164,6 +164,10 @@ async function transcribeBuffer(pcmBuffer, guildId = 'default', userId = 'unknow
 function appendTranscript(guildId = 'default', transcript = '', userId = 'unknown') {
   const baseDir = path.resolve(process.cwd(), 'messages');
   const filePath = path.join(baseDir, `${guildId}.txt`);
+  const configuredMaxMessages = Number.parseInt(process.env.MAX_MESSAGES || '10000', 10);
+  const maxMessages = Number.isInteger(configuredMaxMessages) && configuredMaxMessages > 0
+    ? configuredMaxMessages
+    : 10000;
   const cleanTranscript = normalizeTranscript(transcript);
 
   if (!cleanTranscript) {
@@ -178,8 +182,11 @@ function appendTranscript(guildId = 'default', transcript = '', userId = 'unknow
     return;
   }
 
+  const newLines = cleanTranscript.split(/\r?\n/).filter(Boolean);
+  const retainedLines = lines.concat(newLines).slice(-maxMessages);
+
   fs.mkdirSync(baseDir, { recursive: true });
-  fs.appendFileSync(filePath, `${cleanTranscript}\n`, 'utf8');
+  fs.writeFileSync(filePath, `${retainedLines.join('\n')}\n`, 'utf8');
 }
 
 module.exports = {

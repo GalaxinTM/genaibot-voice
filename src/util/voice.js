@@ -20,6 +20,30 @@ const {
 
 const activeSpeechSessions = new Map();
 
+function isIgnorableVoiceDataError(error) {
+  if (!error) {
+    return false;
+  }
+
+  const message = String(error.stack || error.message || error);
+  return message.includes('The compressed data passed is corrupted');
+}
+
+function attachIgnorableAudioErrorHandler(stream, context) {
+  if (!stream || typeof stream.on !== 'function') {
+    return;
+  }
+
+  stream.on('error', (error) => {
+    if (isIgnorableVoiceDataError(error)) {
+      console.warn(`[voice] Ignoring corrupt Opus payload while decoding ${context}; continuing.`);
+      return;
+    }
+
+    console.warn(`[voice] Audio stream error in ${context}:`, error?.message || error);
+  });
+}
+
 function setupVoiceEcho(connection) {
   // 1. Create the AudioPlayer and subscribe the VoiceConnection
   const player = createAudioPlayer();
@@ -42,7 +66,9 @@ function setupVoiceEcho(connection) {
       channels: 2,
       frameSize: 960,
     });
+    attachIgnorableAudioErrorHandler(decoder, 'echo stream');
     const pcmStream = opusStream.pipe(decoder);
+    attachIgnorableAudioErrorHandler(pcmStream, 'echo PCM stream');
 
     const chunks = [];
     pcmStream.on("data", (chunk) => chunks.push(chunk));
@@ -231,7 +257,9 @@ function startVoiceActivityMonitor(connection) {
       channels: 2,
       frameSize: 960,
     });
+    attachIgnorableAudioErrorHandler(decoder, `speech stream for ${userId}`);
     const pcmStream = speechStream.pipe(decoder);
+    attachIgnorableAudioErrorHandler(pcmStream, `speech PCM for ${userId}`);
 
     const chunks = [];
     const session = {
@@ -264,7 +292,7 @@ function startVoiceActivityMonitor(connection) {
 
       try {
         const transcript = await transcribeBuffer(pcmBuffer, guildId, userId);
-        console.log(`[stt] guild=${guildId} user=${userId} transcript=${transcript}`);
+        // console.log(`[stt] guild=${guildId} user=${userId} transcript=${transcript}`);
       } catch (error) {
         console.warn(`[stt] transcribeBuffer failed for guild ${guildId}:`, error.message);
       }
@@ -313,4 +341,5 @@ module.exports = {
   playAudioBuffer,
   triggerVoiceResponse,
   startVoiceActivityMonitor,
+  isIgnorableVoiceDataError,
 };
