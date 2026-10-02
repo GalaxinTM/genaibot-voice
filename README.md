@@ -2,8 +2,8 @@
 
 Reads and remembers user messages from voice chat, then generates a new message and speaks it out loud.
 
-## Ports
+## Prerequisites
 
-3000: generator-service
-4000: whisper.cpp
-5000: talkmodachi (tts)
+This bot requires an external instance of `talkmodachi` to generate TTS audio, which cannot be included due to legal reasons.
+
+Follow the setup instructions on the official repository: [dylanpdx/talkmodachi](https://github.com/dylanpdx/talkmodachi) (either locally or via Docker).
